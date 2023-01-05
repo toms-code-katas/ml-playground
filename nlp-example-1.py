@@ -165,6 +165,10 @@ if __name__ == '__main__':
     train_labels = np.array(train_labels)
     val_labels = np.array(val_labels)
 
+    wc = tokenizer.word_counts
+    print(wc)
+    print(len(wc))
+
     model = create_model()
     model.summary()
     history = model.fit(train_seqs, train_labels, epochs=100, validation_data=(val_seqs, val_labels))
@@ -172,9 +176,6 @@ if __name__ == '__main__':
     plot_graphs(history, 'accuracy')
     plot_graphs(history, 'loss')
 
-    wc = tokenizer.word_counts
-    print(wc)
-    print(len(wc))
     sentence = ["I'm really upset right now and not happy with you! ANGRY!",
                 "She said yes! We're getting married! Wow!"]
     sequences = tokenizer.texts_to_sequences(sentence)
@@ -183,17 +184,17 @@ if __name__ == '__main__':
     print(model.predict(padded))
 
     # Since tokenizer is deprecated, let's try the TextVectorization layer
-    # vectorization_layer = tf.keras.layers.TextVectorization(max_tokens=vocab_size, output_sequence_length=max_length)
-    # train_sentences, val_sentences, *_ = get_train_and_validation_sentences_and_labels()
-    # vectorization_layer.adapt(train_sentences)
-    # print(len(vectorization_layer.get_vocabulary()))
-    #
-    # model = create_new_model(vectorization_layer)
-    #
-    # history = model.fit(np.array(train_sentences), train_labels, epochs=100, validation_data=(np.array(val_sentences), val_labels))
-    #
-    # plot_graphs(history, 'accuracy')
-    # plot_graphs(history, 'loss')
+    vectorization_layer = tf.keras.layers.TextVectorization(max_tokens=vocab_size, output_sequence_length=max_length)
+    train_sentences, val_sentences, *_ = get_train_and_validation_sentences_and_labels()
+    vectorization_layer.adapt(train_sentences)
+
+    model = create_new_model(vectorization_layer)
+
+    history = model.fit(np.array(train_sentences), train_labels, epochs=100, validation_data=(np.array(val_sentences), val_labels))
+
+    plot_graphs(history, 'accuracy')
+    plot_graphs(history, 'loss')
+    print(model.predict(padded))
 
 
 
