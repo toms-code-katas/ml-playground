@@ -107,17 +107,24 @@ def pad_sequences(sequences):
     return padded_sequences
 
 
-def get_train_and_validation_data(tokenizer):
-    """ Get the train and validation data. """
+def get_train_and_validation_sentences_and_labels():
     sentence_list, label_list = get_sentence_and_label_from_csv_file(emotion_csv_file_name)
-    # Split the data into train and test
-    tokenizer.fit_on_texts(sentence_list[0:training_size])
-    train_seqs = tokenizer.texts_to_sequences(sentence_list[0:training_size])
-    train_seqs = pad_sequences(train_seqs)
-    val_seqs = tokenizer.texts_to_sequences(sentence_list[training_size:])
-    val_seqs = pad_sequences(val_seqs)
+    train_sentences = sentence_list[0:training_size]
+    val_sentences = sentence_list[training_size:]
     train_lbls = label_list[0:training_size]
     val_lbls = label_list[training_size:]
+    return train_sentences, val_sentences, train_lbls, val_lbls
+
+
+def get_train_and_validation_sequences(tokenizer):
+    """ Get the train and validation sequences. """
+    train_sentences, val_sentences, train_lbls, val_lbls = get_train_and_validation_sentences_and_labels()
+    if tokenizer:
+        tokenizer.fit_on_texts(train_sentences)
+    train_seqs = tokenizer.texts_to_sequences(train_sentences)
+    train_seqs = pad_sequences(train_seqs)
+    val_seqs = tokenizer.texts_to_sequences(val_sentences)
+    val_seqs = pad_sequences(val_seqs)
     return train_seqs, val_seqs, train_lbls, val_lbls
 
 
@@ -133,26 +140,34 @@ def create_model():
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
+def create_new_model(text_vectorization_layer):
+    model = tf.keras.Sequential([
+        text_vectorization_layer,
+        tf.keras.layers.Embedding(vocab_size, embedding_dim),
+        tf.keras.layers.GlobalAveragePooling1D(),
+        tf.keras.layers.Dense(8, kernel_regularizer=tf.keras.regularizers.l2(0.025),
+                              activation='relu'),
+        tf.keras.layers.Dense(4, activation='relu'),
+        tf.keras.layers.Dense(1, activation='sigmoid')
+    ])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
 if __name__ == '__main__':
     download_test_data()
 
-    # Tokenizer is deprecated
     tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=vocab_size, oov_token=oov_tok)
 
-    vectorization_layer = tf.keras.layers.TextVectorization(max_tokens=100, output_sequence_length=6)
-    # vectorization_layer.adapt(sentences)
-    print(vectorization_layer.get_vocabulary()) # UNK is the OOV token and '' is the padding token
-
-    train_sentences, val_sentences, train_labels, val_labels = get_train_and_validation_data(tokenizer)
+    train_seqs, val_seqs, train_labels, val_labels = get_train_and_validation_sequences(tokenizer)
     # Needs to be a numpy array because of the way the model is defined
-    train_sentences = np.array(train_sentences)
-    val_sentences = np.array(val_sentences)
+    train_seqs = np.array(train_seqs)
+    val_seqs = np.array(val_seqs)
     train_labels = np.array(train_labels)
     val_labels = np.array(val_labels)
 
     model = create_model()
     model.summary()
-    history = model.fit(train_sentences, train_labels, epochs=100, validation_data=(val_sentences, val_labels))
+    history = model.fit(train_seqs, train_labels, epochs=100, validation_data=(val_seqs, val_labels))
 
     plot_graphs(history, 'accuracy')
     plot_graphs(history, 'loss')
@@ -165,7 +180,20 @@ if __name__ == '__main__':
     sequences = tokenizer.texts_to_sequences(sentence)
     print(sequences)
     padded = pad_sequences(sequences)
-    # print(model.predict(padded))
+    print(model.predict(padded))
+
+    # Since tokenizer is deprecated, let's try the TextVectorization layer
+    # vectorization_layer = tf.keras.layers.TextVectorization(max_tokens=vocab_size, output_sequence_length=max_length)
+    # train_sentences, val_sentences, *_ = get_train_and_validation_sentences_and_labels()
+    # vectorization_layer.adapt(train_sentences)
+    # print(len(vectorization_layer.get_vocabulary()))
+    #
+    # model = create_new_model(vectorization_layer)
+    #
+    # history = model.fit(np.array(train_sentences), train_labels, epochs=100, validation_data=(np.array(val_sentences), val_labels))
+    #
+    # plot_graphs(history, 'accuracy')
+    # plot_graphs(history, 'loss')
 
 
 
