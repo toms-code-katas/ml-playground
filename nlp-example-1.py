@@ -1,4 +1,5 @@
 import csv
+import json
 import os
 import string
 import urllib.request
@@ -7,8 +8,6 @@ import tensorflow as tf
 from bs4 import BeautifulSoup
 from ml_utils import plot_graphs
 
-
-emotion_csv_file_name = 'binary-emotion.csv'
 
 # Stopwords are words that are filtered out of the text before processing
 stopwords = ["a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "as", "at",
@@ -56,11 +55,21 @@ oov_tok = "<OOV>"
 training_size = 28000
 
 
-def download_test_data():
+def download_test_data_as_csv():
     """ Download the test data from the internet. """
-    if not os.path.exists(emotion_csv_file_name):
+    if not os.path.exists('binary-emotion.csv'):
         url = 'https://storage.googleapis.com/laurencemoroney-blog.appspot.com/binary-emotion.csv'
-        urllib.request.urlretrieve(url, emotion_csv_file_name)
+        urllib.request.urlretrieve(url, 'binary-emotion.csv')
+    return 'binary-emotion.csv'
+
+
+def download_test_data_as_json():
+    """ Download the test data from the internet. """
+    if not os.path.exists('binary-emotion.json'):
+        url = 'https://storage.googleapis.com/laurencemoroney-blog.appspot.com/binary-emotion.json'
+        urllib.request.urlretrieve(url, 'binary-emotion.json')
+    return 'binary-emotion.json'
+
 
 def preprocess_text(text):
     """ Preprocess text by removing html tags, punctuation and stopwords. """
@@ -99,6 +108,20 @@ def get_sentence_and_label_from_csv_file(csv_file_name, max_rows=100000000):
                 break
     return sentence_list, label_list
 
+def get_sentence_and_label_from_json_file(json_file_name, max_rows=100000000):
+    """ Read the json file and return the sentences and labels. """
+    sentence_list = []
+    label_list = []
+    with open(json_file_name, 'r') as json_file:
+        json_data = json.load(json_file)
+        rows_read = 0
+        for data in json_data:
+            label_list.append(int(data["emotion"]))
+            sentence_list.append(preprocess_text(data["sentence"]))
+            if rows_read >= max_rows:
+                break
+    return sentence_list, label_list
+
 
 def pad_sequences(sequences):
     """ Pad the sequence to the given max_length. """
@@ -107,8 +130,11 @@ def pad_sequences(sequences):
     return padded_sequences
 
 
-def get_train_and_validation_sentences_and_labels():
-    sentence_list, label_list = get_sentence_and_label_from_csv_file(emotion_csv_file_name)
+def get_train_and_validation_sentences_and_labels(emotion_file_name):
+    if emotion_file_name.endswith('.json'):
+        sentence_list, label_list = get_sentence_and_label_from_json_file(emotion_file_name)
+    elif emotion_file_name.endswith('.csv'):
+        sentence_list, label_list = get_sentence_and_label_from_csv_file(emotion_file_name)
     train_sentences = sentence_list[0:training_size]
     val_sentences = sentence_list[training_size:]
     train_lbls = label_list[0:training_size]
@@ -116,9 +142,9 @@ def get_train_and_validation_sentences_and_labels():
     return train_sentences, val_sentences, train_lbls, val_lbls
 
 
-def get_train_and_validation_sequences(tokenizer):
+def get_train_and_validation_sequences(tokenizer, emotion_file_name):
     """ Get the train and validation sequences. """
-    train_sentences, val_sentences, train_lbls, val_lbls = get_train_and_validation_sentences_and_labels()
+    train_sentences, val_sentences, train_lbls, val_lbls = get_train_and_validation_sentences_and_labels(emotion_file_name)
     if tokenizer:
         tokenizer.fit_on_texts(train_sentences)
     train_seqs = tokenizer.texts_to_sequences(train_sentences)
@@ -154,11 +180,11 @@ def create_new_model(text_vectorization_layer):
     return model
 
 if __name__ == '__main__':
-    download_test_data()
+    emotions_file_name = download_test_data_as_json()
 
     tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=vocab_size, oov_token=oov_tok)
 
-    train_seqs, val_seqs, train_labels, val_labels = get_train_and_validation_sequences(tokenizer)
+    train_seqs, val_seqs, train_labels, val_labels = get_train_and_validation_sequences(tokenizer, emotions_file_name)
     # Needs to be a numpy array because of the way the model is defined
     train_seqs = np.array(train_seqs)
     val_seqs = np.array(val_seqs)
@@ -185,7 +211,7 @@ if __name__ == '__main__':
 
     # Since tokenizer is deprecated, let's try the TextVectorization layer
     vectorization_layer = tf.keras.layers.TextVectorization(max_tokens=vocab_size, output_sequence_length=max_length)
-    train_sentences, val_sentences, *_ = get_train_and_validation_sentences_and_labels()
+    train_sentences, val_sentences, *_ = get_train_and_validation_sentences_and_labels(emotions_file_name)
     vectorization_layer.adapt(train_sentences)
 
     model = create_new_model(vectorization_layer)
