@@ -221,8 +221,3 @@ if __name__ == '__main__':
     plot_graphs(history, 'accuracy')
     plot_graphs(history, 'loss')
     print(model.predict(padded))
-
-
-
-
-
