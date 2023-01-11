@@ -1,40 +1,65 @@
-import numpy as np
+import numpy
 import tensorflow as tf
+import numpy as np
 
-from ml_utils import StopOnLoss
+fmnist = tf.keras.datasets.fashion_mnist
 
-def secret_function(x):
-    y = 2 * x
-    return y
+(training_images, training_labels), (test_images, test_labels) = fmnist.load_data()
 
-def predict(x, model):
-    print(f"{model.predict([x], verbose=0)} == {secret_function(x)}")
+print(help(fmnist.load_data)) # Prints the docstring of the function. In this case it includes the labels and their meaning.
 
-xs = np.arange(-500, 500, 1, dtype=np.float32)
+print(training_images.shape) # (60000, 28, 28) means 60000 images of 28x28 pixels
 
-f = np.vectorize(secret_function)
-ys = f(xs)
+# Set the print options so that we can see one line of the array in one line of the console
+np.set_printoptions(linewidth=320)
 
-model_mse = tf.keras.Sequential([
-    tf.keras.layers.Dense(name="1_unit", units=1, input_shape=[1]),
-    tf.keras.layers.Dense(name="2_unit", units=2),
-    tf.keras.layers.Dense(name="3_unit", units=3),
-    # tf.keras.layers.Dense(name="output_layer", units=1) # This is the output layer with one unit that predicts the output. Since the output is a scalar, the output layer has only one unit.
-    tf.keras.layers.Dense(name="output_layer", units=1) # This output layer has 2 units. The output is a vector with 2 elements.
-])
-model_mse.compile(optimizer='adam', loss='mean_squared_error')
-model_mse.summary()
+index = 0 # Should be a boot
 
-for layer in model_mse.layers:
-    print(layer.name, layer.input_shape, layer.output_shape)
+# Print the label and the corresponding image
+print(f'Label: {training_labels[index]}')
+print(f'Original image: {training_images[index]}')
+print(f'Image normalized: {np.around(training_images[index]/255, 2)}')
+# The normalized image contains values which are much closer together than the original image.
 
-print(model_mse.output_shape)
+training_images = training_images / 255.0 # Normalize the training images to values between 0 and 1
+test_images = test_images /255.0
+# Normalization in this case means that the values are scaled down to values between 0 and 1.
+# This is done because the original values are between 0 and 255, which is a very large range.
+# Using smaller values makes similar values closer together, which makes it easier for the model to learn.
+# See here: https://medium.com/analytics-vidhya/a-tip-a-day-python-tip-8-why-should-we-normalize-image-pixel-values-or-divide-by-255-4608ac5cd26a
 
-model_mse.fit(xs, ys, epochs=500, callbacks=[StopOnLoss(0.001)], shuffle=True, verbose=0)
 
-for number in range(-5, 5):
-    # If the output layer has only one unit, the output is a scalar
-    # For example, the output of the network is [[-10.008559]] for the input -5
-    # If the output layer has more than one unit, the output is a vector. For 2 units,
-    # the output is [[-10.008559, -10.008559]] for the input -5
-    predict(number, model_mse)
+# The flatten layer is needed because the input data is 2D (28x28) and the Dense layer expects 1D data
+model = tf.keras.models.Sequential([tf.keras.layers.Flatten(),
+                                    tf.keras.layers.Dense(128, activation=tf.nn.relu),
+                                    tf.keras.layers.Dense(10, activation=tf.nn.softmax)])
+
+model.compile(optimizer = 'adam',
+              loss = 'sparse_categorical_crossentropy')
+
+model.fit(training_images, training_labels, epochs=2, validation_data=(test_images, test_labels), verbose=1)
+
+model.summary()
+
+# The output shape of the flatten layer is (None, 784) where None is the number of images in the input data
+# and 784 is the number of pixels in the image (28x28), Thus the 2d array of the image is flattened to a 1d array
+# The output shape of the first dense layer is (None, 128) where None is the number of images in the input data
+# and 128 is the number of neurons in the layer.
+# The output shape of the second dense layer is (None, 10) where None is the number of images in the input data
+# and 10 is the number of neurons in the layer.
+# Softmax is a function that takes as input a vector of K real numbers, and normalizes it
+# into a probability distribution consisting of K probabilities
+# Thus the output of the softmax layer is a vector of 10 probabilities that sum to 1.0
+for layer in model.layers:
+    print(f"Layer {layer.name}, input_shape={layer.input_shape}, output_shape={layer.output_shape}")
+
+test_image = (test_images[0] * 255).astype(np.int32) # Convert image back to 8 bit integer values
+test_image_label = test_labels[0]
+
+print(f'Test image label: {test_image_label}')
+print(f'Test Image: {test_image}')
+
+predicted_label = model.predict(np.array([test_image])) # Needs to be an array because the model expects a 4D array with shape (None, 28, 28, 1)
+predicted_label = numpy.argmax(predicted_label) # Get the index of the highest probability
+
+print(f'Predicted label: is {predicted_label}. Actual label is {test_image_label}.')
