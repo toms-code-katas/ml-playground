@@ -24,3 +24,5 @@ mixed_values = tf.constant([2, 3], dtype=tf.float32)
 # In this case the loss is 2 - 1 = 1 and 3 - 1 = 2 thus the mean absolute error is 3 / 2 = 1.5
 loss = tf.keras.losses.mean_absolute_error(mixed_values, all_ones)
 print(f"Loss: {loss.numpy()}") # Loss: 1.5
+
+# See https://keras.io/api/losses/ for more loss functions and examples
