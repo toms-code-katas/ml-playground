@@ -2,6 +2,8 @@ import os
 
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
+
 
 def create_model():
     model = tf.keras.models.Sequential([
@@ -32,35 +34,59 @@ def create_model():
 current_folder = os.path.dirname(os.path.realpath(__file__))
 print(f"Reading data from {current_folder}")
 
-# dataset is a tf.data.Dataset object with two elements: (data, labels). Since we split the data into training and validation
-# we have two datasets: train_dataset and validation_dataset. The method image_dataset_from_directory in this case
-# returns a tuple (train_dataset, validation_dataset)
-# Using label_mode='categorical' we get a one-hot encoded vector for the labels
-dataset = tf.keras.preprocessing.image_dataset_from_directory(current_folder + "/tmp/rps-train/rps",
-                                                              labels="inferred", label_mode="categorical",
-                                                              color_mode="rgb", batch_size=16,
-                                                              image_size=(150, 150),
-                                                              seed=123, shuffle=True, validation_split=0.2,
-                                                              subset="both")
+
+TRAINING_DIR = "tmp/rps-train/rps"
+training_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
+      rescale = 1./255,
+	    rotation_range=40,
+      width_shift_range=0.2,
+      height_shift_range=0.2,
+      shear_range=0.2,
+      zoom_range=0.2,
+      horizontal_flip=True,
+      fill_mode='nearest')
+
+VALIDATION_DIR = "tmp/rps-test/rps-test-set"
+validation_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale = 1./255)
+
+train_generator = training_datagen.flow_from_directory(
+	TRAINING_DIR,
+	target_size=(150,150),
+	class_mode='categorical',
+    batch_size=16
+)
+
+validation_generator = validation_datagen.flow_from_directory(
+	VALIDATION_DIR,
+	target_size=(150,150),
+	class_mode='categorical',
+    batch_size=16
+)
 
 model = create_model()
 
-if os.path.exists("rps-model.h5"):
-    model = tf.keras.models.load_model("rps-model.h5")
+if os.path.exists("rps-2-model.h5"):
+    model = tf.keras.models.load_model("rps-2-model.h5")
 else:
-    model.fit(dataset[0], epochs=5, validation_data=dataset[1])
-    model.save("rps-model.h5")
+    model.fit(train_generator, epochs=2, validation_data=validation_generator, verbose=1)
+    model.save("rps-2-model.h5")
 
-for image_batch, label_batch in dataset[1].take(1):
-    predictions = model.predict(image_batch)
-    print(f"Predictions: {predictions} and labels: {label_batch}")
-    # Display the image using matplotlib
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(10, 10))
-    for i in range(image_batch.shape[0]):
-        ax = plt.subplot(4, 4, i + 1)
-        plt.imshow(image_batch[i].numpy().astype("uint8"))
-        plt.title(np.around(predictions[i]))
-        plt.axis("off")
+# Retrieve a batch of images from the test set and plot them
+i = 0
+for _ in range(16):
+    ax = plt.subplot(4, 4, i + 1)
+    image_batch, label_batch = validation_generator.next()
+    # Take the first image from the batch
+    img = image_batch[0]
+    # In order to predict the class of the image we need to add a batch dimension
+    predict_img = (np.expand_dims(img, 0))
+    prediction = model.predict(predict_img)
+    plt.imshow(img)
+    # prediction has the shape (1, 3) because we added a batch dimension. We need to remove it
+    # to get the shape (3,) which are the probabilities for each class
+    prediction = np.squeeze(prediction)
+    plt.title(np.around(prediction))
+    plt.axis("off")
+    i = i + 1
 
 plt.show()
