@@ -1,223 +1,140 @@
-import csv
-import json
 import os
-import string
-import urllib.request
 import numpy as np
 import tensorflow as tf
-from bs4 import BeautifulSoup
-from ml_utils import plot_graphs
+import tensorflow_datasets as tfds
 
+from ml_utils import pre_process_text
 
-# Stopwords are words that are filtered out of the text before processing
-stopwords = ["a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "as", "at",
-             "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "could", "did", "do",
-             "does", "doing", "down", "during", "each", "few", "for", "from", "further", "had", "has", "have", "having",
-             "he", "hed", "hes", "her", "here", "heres", "hers", "herself", "him", "himself", "his", "how",
-             "hows", "i", "id", "ill", "im", "ive", "if", "in", "into", "is", "it", "its", "itself",
-             "lets", "me", "more", "most", "my", "myself", "nor", "of", "on", "once", "only", "or", "other", "ought",
-             "our", "ours", "ourselves", "out", "over", "own", "same", "she", "shed", "shell", "shes", "should",
-             "so", "some", "such", "than", "that", "thats", "the", "their", "theirs", "them", "themselves", "then",
-             "there", "theres", "these", "they", "theyd", "theyll", "theyre", "theyve", "this", "those", "through",
-             "to", "too", "under", "until", "up", "very", "was", "we", "wed", "well", "were", "weve", "were",
-             "what", "whats", "when", "whens", "where", "wheres", "which", "while", "who", "whos", "whom", "why",
-             "whys", "with", "would", "you", "youd", "youll", "youre", "youve", "your", "yours", "yourself",
-             "yourselves"]
+def create_model(tokenizer):
+    embedding_dim = 64
+    lstm1_dim = 64
+    lstm2_dim = 32
+    dense_dim = 64
 
-# This table is used to remove punctuation from the text
-# From the documentation: "If there is a third argument, it must be a string,
-# whose characters will be mapped to None in the result."
-# string.punctuation contains all the punctuation characters, e.g. !"#$%&'()*
-translation_table = str.maketrans('', '', string.punctuation)
-
-# The maximum number of words to be used by the tokenizer
-vocab_size = 2000
-
-# The dimension of the embedding vector
-embedding_dim = 6
-
-# The maximum length of a sentence after padding and truncating
-max_length = 100
-
-# The type of truncation to be used, either 'pre' or 'post'.
-# Which means that if the sentence is longer than max_length, it will be truncated
-# from the beginning or the end of the sentence.
-trunc_type='post'
-
-# The type of padding to be used, either 'pre' or 'post'. Which means that if the sentence is
-# shorter than max_length, it will be padded from the beginning or the end of the sentence.
-padding_type='post'
-
-# The out of vocabulary token
-oov_tok = "<OOV>"
-
-# The size of the training set
-training_size = 28000
-
-
-def download_test_data_as_csv():
-    """ Download the test data from the internet. """
-    if not os.path.exists('binary-emotion.csv'):
-        url = 'https://storage.googleapis.com/laurencemoroney-blog.appspot.com/binary-emotion.csv'
-        urllib.request.urlretrieve(url, 'binary-emotion.csv')
-    return 'binary-emotion.csv'
-
-
-def download_test_data_as_json():
-    """ Download the test data from the internet. """
-    if not os.path.exists('binary-emotion.json'):
-        url = 'https://storage.googleapis.com/laurencemoroney-blog.appspot.com/binary-emotion.json'
-        urllib.request.urlretrieve(url, 'binary-emotion.json')
-    return 'binary-emotion.json'
-
-
-def preprocess_text(text):
-    """ Preprocess text by removing html tags, punctuation and stopwords. """
-    sentence = text.lower()
-    # surround punctuation with spaces so that it can be removed later
-    # e.g. "I'm" -> "I ' m" -> "Im"
-    sentence = sentence.replace(",", " , ")
-    sentence = sentence.replace(".", " . ")
-    sentence = sentence.replace("-", " - ")
-    sentence = sentence.replace("/", " / ")
-    # Remove html tags
-    soup = BeautifulSoup(sentence)
-    sentence = soup.get_text()
-    words = sentence.split()
-    filtered_sentence = ""
-    for word in words:
-        # Remove punctuation
-        word = word.translate(translation_table)
-        if word not in stopwords:
-            filtered_sentence = filtered_sentence + word + " "
-    return filtered_sentence.strip()
-
-
-def get_sentence_and_label_from_csv_file(csv_file_name, max_rows=100000000):
-    """ Read the csv file and return the sentences and labels. """
-    sentence_list = []
-    label_list = []
-    with open(csv_file_name, 'r') as csv_file:
-        reader = csv.reader(csv_file, delimiter=",")
-        rows_read = 0
-        for row in reader:
-            label_list.append(int(row[0])) # The first row is the label
-            sentence_list.append(preprocess_text(row[1])) # The second row is the sentence
-            rows_read += 1
-            if rows_read >= max_rows:
-                break
-    return sentence_list, label_list
-
-def get_sentence_and_label_from_json_file(json_file_name, max_rows=100000000):
-    """ Read the json file and return the sentences and labels. """
-    sentence_list = []
-    label_list = []
-    with open(json_file_name, 'r') as json_file:
-        json_data = json.load(json_file)
-        rows_read = 0
-        for data in json_data:
-            label_list.append(int(data["emotion"]))
-            sentence_list.append(preprocess_text(data["sentence"]))
-            if rows_read >= max_rows:
-                break
-    return sentence_list, label_list
-
-
-def pad_sequences(sequences):
-    """ Pad the sequence to the given max_length. """
-    padded_sequences = tf.keras.preprocessing.sequence.pad_sequences(
-        sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type)
-    return padded_sequences
-
-
-def get_train_and_validation_sentences_and_labels(emotion_file_name):
-    if emotion_file_name.endswith('.json'):
-        sentence_list, label_list = get_sentence_and_label_from_json_file(emotion_file_name)
-    elif emotion_file_name.endswith('.csv'):
-        sentence_list, label_list = get_sentence_and_label_from_csv_file(emotion_file_name)
-    train_sentences = sentence_list[0:training_size]
-    val_sentences = sentence_list[training_size:]
-    train_lbls = label_list[0:training_size]
-    val_lbls = label_list[training_size:]
-    return train_sentences, val_sentences, train_lbls, val_lbls
-
-
-def get_train_and_validation_sequences(tokenizer, emotion_file_name):
-    """ Get the train and validation sequences. """
-    train_sentences, val_sentences, train_lbls, val_lbls = get_train_and_validation_sentences_and_labels(emotion_file_name)
-    if tokenizer:
-        tokenizer.fit_on_texts(train_sentences)
-    train_seqs = tokenizer.texts_to_sequences(train_sentences)
-    train_seqs = pad_sequences(train_seqs)
-    val_seqs = tokenizer.texts_to_sequences(val_sentences)
-    val_seqs = pad_sequences(val_seqs)
-    return train_seqs, val_seqs, train_lbls, val_lbls
-
-
-def create_model():
+    # Build the model
     model = tf.keras.Sequential([
-        tf.keras.layers.Embedding(vocab_size, embedding_dim),
-        tf.keras.layers.GlobalAveragePooling1D(),
-        tf.keras.layers.Dense(8, kernel_regularizer=tf.keras.regularizers.l2(0.025),
-                              activation='relu'),
-        tf.keras.layers.Dense(4, activation='relu'),
+        tf.keras.layers.Embedding(tokenizer.vocab_size, embedding_dim),
+        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(lstm1_dim, return_sequences=True)),
+        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(lstm2_dim)),
+        tf.keras.layers.Dense(dense_dim, activation='relu'),
         tf.keras.layers.Dense(1, activation='sigmoid')
     ])
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    return model
 
-def create_new_model(text_vectorization_layer):
-    model = tf.keras.Sequential([
-        text_vectorization_layer,
-        tf.keras.layers.Embedding(vocab_size, embedding_dim),
-        tf.keras.layers.GlobalAveragePooling1D(),
-        tf.keras.layers.Dense(8, kernel_regularizer=tf.keras.regularizers.l2(0.025),
-                              activation='relu'),
-        tf.keras.layers.Dense(4, activation='relu'),
-        tf.keras.layers.Dense(1, activation='sigmoid')
-    ])
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    return model
-
-if __name__ == '__main__':
-    emotions_file_name = download_test_data_as_json()
-
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=vocab_size, oov_token=oov_tok)
-
-    train_seqs, val_seqs, train_labels, val_labels = get_train_and_validation_sequences(tokenizer, emotions_file_name)
-    # Needs to be a numpy array because of the way the model is defined
-    train_seqs = np.array(train_seqs)
-    val_seqs = np.array(val_seqs)
-    train_labels = np.array(train_labels)
-    val_labels = np.array(val_labels)
-
-    wc = tokenizer.word_counts
-    print(wc)
-    print(len(wc))
-
-    model = create_model()
+    # Print the model summary
     model.summary()
-    history = model.fit(train_seqs, train_labels, epochs=100, validation_data=(val_seqs, val_labels))
 
-    plot_graphs(history, 'accuracy')
-    plot_graphs(history, 'loss')
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
 
-    sentence = ["I'm really upset right now and not happy with you! ANGRY!",
-                "She said yes! We're getting married! Wow!"]
-    sequences = tokenizer.texts_to_sequences(sentence)
-    print(sequences)
-    padded = pad_sequences(sequences)
-    print(model.predict(padded))
+plain_imdb, plain_info = tfds.load("imdb_reviews", with_info=True, as_supervised=True)
+# Print all the features of the dataset
+# The text feature of the dataset is a tf.string because the dataset is a plain text dataset.
+for key, value in plain_info.features.items():
+    print(key, value)
 
-    # Since tokenizer is deprecated, let's try the TextVectorization layer
-    vectorization_layer = tf.keras.layers.TextVectorization(max_tokens=vocab_size, output_sequence_length=max_length)
-    train_sentences, val_sentences, *_ = get_train_and_validation_sentences_and_labels(emotions_file_name)
-    vectorization_layer.adapt(train_sentences)
+sub_word_imdb, sub_word_info = tfds.load('imdb_reviews/subwords8k', with_info=True, as_supervised=True)
+# Print all the features of the dataset
+# Note that the text feature of the dataset contains an encoder
+# The text feature has the dtype int64 because the encoder is a subword encoder
+for key, value in sub_word_info.features.items():
+    print(key, value)
 
-    model = create_new_model(vectorization_layer)
+# Get the encoder which is used to encode the text
+sub_word_tokenizer = sub_word_info.features['text'].encoder
+print(sub_word_tokenizer.subwords[:10])
 
-    history = model.fit(np.array(train_sentences), train_labels, epochs=100, validation_data=(np.array(val_sentences), val_labels))
+# print the first data of the plain text dataset
+# It will be a tuple of (text, label)
+for example in plain_imdb['train'].take(1):
+    print(example)
 
-    plot_graphs(history, 'accuracy')
-    plot_graphs(history, 'loss')
-    print(model.predict(padded))
+# print the first data of the subword text dataset
+# It will not contain text, but instead it will contain the encoded text as a vector of integers
+for example in sub_word_imdb['train'].take(1):
+    print(example)
+    # Let's decode the encoded text
+    decoded_text = sub_word_tokenizer.decode(example[0])
+    print(decoded_text)
+
+BUFFER_SIZE = 10000
+BATCH_SIZE = 256
+
+dataset = sub_word_imdb
+
+# Print the number of examples in each split
+print(sub_word_info.splits['train'].num_examples)
+print(sub_word_info.splits['test'].num_examples)
+
+# Get the train and test splits
+train_data, test_data = dataset['train'], dataset['test']
+
+# Shuffle the training data
+train_dataset = train_data.shuffle(BUFFER_SIZE)
+
+# Batch and pad the datasets to the maximum length of the sequences
+train_dataset = train_dataset.padded_batch(BATCH_SIZE)
+test_dataset = test_data.padded_batch(BATCH_SIZE)
+
+model = create_model(sub_word_tokenizer)
+
+# Only train the model if the modek has not yet been saved
+if not os.path.exists('model-nlp-example-1.h5'):
+    # Train the model
+    model.fit(train_dataset, epochs=10, validation_data=test_dataset)
+
+    # Save the model
+    model.save('model-nlp-example-1.h5')
+else:
+    # Load the model
+    model = tf.keras.models.load_model('model-nlp-example-1.h5')
+
+# Now predict the sentiment of an arbitrary review from the validation dataset
+for example in test_dataset.take(1):
+    # Get a random review from the validation dataset
+    review_index = np.random.randint(0, BATCH_SIZE)
+
+    # No padding or truncation is needed because the review is already padded and truncated
+    review, label = example[0][review_index], example[1][review_index]
+
+    array = review.numpy()
+    # Print the length of the review and count the number of zero elements from the end which is padding
+    print(f"Length of review: {len(array)}")
+    print(f"Number of padding elements: {len(array) - np.count_nonzero(array)}")
+
+    # Print the zero elements from the end
+    # Get the current print options threshold and set it to a very high value so that the entire array is printed
+    threshold = np.get_printoptions()['threshold']
+    np.set_printoptions(threshold=np.inf)
+    print(f"Padding elements: {array[:np.count_nonzero(array) + 2]}")
+    # Reset the print options threshold
+    np.set_printoptions(threshold=threshold)
+
+    # Decode the review
+    decoded_review = sub_word_tokenizer.decode(review)
+    # Predict the sentiment of the review
+    prediction = model.predict(tf.expand_dims(review, 0))
+    print(prediction)
+    print('Review: {}'.format(decoded_review))
+    print('Sentiment: {}'.format('Positive' if prediction[0][0] > 0.5 else 'Negative'))
+
+# Now predict the sentiment of an arbitrary review from the folder sample_reviews
+for filename in os.listdir('sample_reviews'):
+    with open(os.path.join('sample_reviews', filename), 'r') as f:
+
+        # Read the review from the file
+        review = f.read()
+
+        # Preprocess the review
+        review = pre_process_text(review)
+        print(f"Pre processed review: {review}")
+
+        # Encode the review
+        encoded_review = sub_word_tokenizer.encode(review)
+
+        # Decode the review again to check if the encoding and decoding works
+        decoded_review = sub_word_tokenizer.decode(encoded_review)
+        print(f"Decoded review: {decoded_review}")
+
+        # Predict the sentiment of the review
+        prediction = model.predict(tf.expand_dims(encoded_review, 0))
+        print('Sentiment: {}'.format('Positive' if prediction[0][0] > 0.5 else 'Negative'))
