@@ -1,7 +1,11 @@
+import io
+import os
 import string
+import tempfile
 from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
 import tensorflow as tf
+
 
 stopwords = ["a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any",
              "are", "as", "at",
@@ -66,6 +70,11 @@ def plot_graphs(history, string):
   plt.show()
 
 def pre_process_text(text):
+    text = text.replace(",", " , ")
+    text = text.replace(".", " . ")
+    text = text.replace("-", " - ")
+    text = text.replace("/", " / ")
+    text = text.replace("’", "")
 
     # Remove html tags
     soup = BeautifulSoup(text, features="html.parser")
@@ -77,3 +86,55 @@ def pre_process_text(text):
     # Now remove stopwords
     text = ' '.join([word for word in text.split() if word not in stopwords])
     return text
+
+def print_vocabulary_of_tokenizer(tokenizer, items=10):
+    # Get the first 10 items of the vocabulary
+    vocabulary = list(tokenizer.word_index.items())[:items]
+    for word, index in vocabulary:
+        print(f"{word} -> {index}")
+
+def print_decoded_sequence(sequence, tokenizer):
+    for index in sequence:
+        print(f"{index} -> {tokenizer.index_word[index]}")
+
+
+def visualize_embeddings_from_model(model, embedding_layer_name, tokenizer):
+    """
+    This function will create a file that can be used by the embedding projector
+    See https://github.com/https-deeplearning-ai/tensorflow-1-public/blob/main/C3/W2/ungraded_labs/C3_W2_Lab_1_imdb.ipynb
+    """
+    # Get the embedding layer from the model
+    embedding_layer = model.get_layer(embedding_layer_name)
+
+    # Get the weights from the embedding layer
+    weights = embedding_layer.get_weights()[0]
+
+    # Get the vocabulary from the tokenizer
+    vocab = tokenizer.word_index
+    reverse_word_index = dict([(value, key) for (key, value) in vocab.items()])
+
+    # The vocabulary size is set to the first item in the weights shape
+    vocab_size = weights.shape[0]
+    print(f"Vocabulary size: {vocab_size}")
+
+    # Create a temporary directory for the files
+    temp_dir = tempfile.mkdtemp()
+
+    # Create the files for the embedding vectors and the words in the temporary directory
+    out_v = io.open(os.path.join(temp_dir, 'vecs.tsv'), 'w', encoding='utf-8')
+    out_m = io.open(os.path.join(temp_dir, 'meta.tsv'), 'w', encoding='utf-8')
+
+    # Write the embedding vectors and the words to the files
+    for word_num in range(1, vocab_size):
+        word = reverse_word_index[word_num]
+        embeddings = weights[word_num]
+        out_m.write(word + "\n")
+        out_v.write('\t'.join([str(x) for x in embeddings]) + "\n")
+    out_v.close()
+    out_m.close()
+
+    # Close the files
+    out_v.close()
+    out_m.close()
+
+    return out_v, out_m
