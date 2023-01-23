@@ -138,3 +138,26 @@ def visualize_embeddings_from_model(model, embedding_layer_name, tokenizer):
     out_m.close()
 
     return out_v, out_m
+
+def plot_word_count_distribution(tokenizer, from_index=0, to_index=100, print_words=True):
+    wc = tokenizer.word_counts
+    # Sort the word counts by their count
+    wc = dict(sorted(wc.items(), key=lambda item: item[1], reverse=True))
+    # Get the range of words to plot
+    wc = dict(list(wc.items())[from_index:to_index])
+
+    x_counter = []
+    word_count = []
+    curr_x = 1
+    for item in wc:
+        x_counter.append(curr_x)
+        curr_x = curr_x + 1
+        word_count.append(wc[item])
+
+    plt.plot(x_counter, word_count)
+    plt.show()
+
+    # Display the words and their counts
+    if print_words:
+        for item in wc:
+            print(f"{item}: {wc[item]}")
