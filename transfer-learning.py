@@ -1,6 +1,9 @@
 import os
+import random
 import requests
 import zipfile
+
+import tensorflow as tf
 
 from tensorflow.keras import layers
 from tensorflow.keras import Model
@@ -80,30 +83,30 @@ if not os.path.exists("cats_and_dogs_filtered.zip"):
 train_dir = "cats_and_dogs_filtered/train"
 validation_dir = "cats_and_dogs_filtered/validation"
 
-train_datagen = ImageDataGenerator(rescale=1./255,
-                                   rotation_range = 40,
-                                   width_shift_range = 0.2,
-                                   height_shift_range = 0.2,
-                                   shear_range = 0.2,
-                                   zoom_range = 0.2,
-                                   horizontal_flip = True)
-
-validation_datagen = ImageDataGenerator(rescale=1./255)
-
-train_generator = train_datagen.flow_from_directory(train_dir,
-                                                    batch_size = 20,
-                                                    class_mode = 'binary',
-                                                    target_size = (150, 150))
-
-validation_generator = validation_datagen.flow_from_directory(validation_dir,
-                                                                batch_size=20,
-                                                                class_mode="binary",
-                                                                target_size=(150, 150))
 
 # Load the whole model if it has already been saved
 if os.path.exists("cats_and_dogs.h5"):
-    model.load("cats_and_dogs.h5")
+    model = tf.keras.models.load_model('cats_and_dogs.h5')
 else:
+    train_datagen = ImageDataGenerator(rescale=1. / 255,
+                                       rotation_range=40,
+                                       width_shift_range=0.2,
+                                       height_shift_range=0.2,
+                                       shear_range=0.2,
+                                       zoom_range=0.2,
+                                       horizontal_flip=True)
+
+    validation_datagen = ImageDataGenerator(rescale=1. / 255)
+
+    train_generator = train_datagen.flow_from_directory(train_dir,
+                                                        batch_size=20,
+                                                        class_mode='binary',
+                                                        target_size=(150, 150))
+
+    validation_generator = validation_datagen.flow_from_directory(validation_dir,
+                                                                  batch_size=20,
+                                                                  class_mode="binary",
+                                                                  target_size=(150, 150))
     # Train the model
     history = model.fit(train_generator, validation_data=validation_generator, epochs=10, verbose=1)
     model.save("cats_and_dogs.h5")
@@ -116,20 +119,33 @@ else:
 import numpy as np
 from tensorflow.keras.preprocessing import image
 
-img = image.load_img("cats_and_dogs_filtered/validation/cats/cat.2000.jpg", target_size=(150, 150))
-x = image.img_to_array(img)
-x = np.expand_dims(x, axis=0)
-images = np.vstack([x])
+# Select a random image from the validation set
+validation_cats_dir = os.path.join(validation_dir, "cats")
+validation_dogs_dir = os.path.join(validation_dir, "dogs")
 
-classes = model.predict(images, batch_size=10)
-print(classes[0])
-if classes[0] > 0.5:
-    print("dog")
-else:
-    print("cat")
 
-# Now display the image for verification
-import matplotlib.pyplot as plt
-plt.imshow(img)
-plt.show()
+for i in range(10):
+    validation_cats = os.listdir(validation_cats_dir)
+    validation_dogs = os.listdir(validation_dogs_dir)
+    random_cat = random.choice(validation_cats)
+    random_dog = random.choice(validation_dogs)
+    random_cat_path = os.path.join(validation_cats_dir, random_cat)
+    random_dog_path = os.path.join(validation_dogs_dir, random_dog)
+
+    img = image.load_img(random_cat_path, target_size=(150, 150))
+    x = image.img_to_array(img)
+    x = np.expand_dims(x, axis=0)
+    images = np.vstack([x])
+
+    classes = model.predict(images, batch_size=10)
+    print(classes[0])
+    if classes[0] > 0.5:
+        print("dog")
+    else:
+        print("cat")
+
+    # Now display the image for verification
+    import matplotlib.pyplot as plt
+    plt.imshow(img)
+    plt.show()
 
