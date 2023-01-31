@@ -4,6 +4,7 @@ import string
 import tempfile
 from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
 
 
@@ -161,3 +162,76 @@ def plot_word_count_distribution(tokenizer, from_index=0, to_index=100, print_wo
     if print_words:
         for item in wc:
             print(f"{item}: {wc[item]}")
+
+
+def windowed_dataset(series, window_size, batch_size, shuffle_buffer):
+    dataset = tf.data.Dataset.from_tensor_slices(series)
+
+    dataset = dataset.window(window_size + 1, shift=1, drop_remainder=True)
+
+    dataset = dataset.flat_map(lambda window: window.batch(window_size + 1))
+
+    dataset = dataset.map(lambda window: (window[:-1], window[-1]))
+
+    dataset = dataset.shuffle(shuffle_buffer)
+
+    dataset = dataset.batch(batch_size).prefetch(1)
+
+    return dataset
+
+
+def trend(time, slope=0):
+    series = slope * time
+    return series
+
+
+def seasonal_pattern(season_time):
+    data_pattern = np.where(season_time < 0.4,
+                            np.cos(season_time * 2 * np.pi),
+                            1 / np.exp(3 * season_time))
+    return data_pattern
+
+
+def seasonality(time, period, amplitude=1, phase=0):
+    season_time = ((time + phase) % period) / period
+    data_pattern = amplitude * seasonal_pattern(season_time)
+    return data_pattern
+
+
+def noise(time, noise_level=1, seed=None):
+    rnd = np.random.RandomState(seed)
+    noise = rnd.randn(len(time)) * noise_level
+    return noise
+
+
+def plot_series(x, y, format="-", start=0, end=None,
+                title=None, xlabel=None, ylabel=None, legend=None):
+    plt.figure(figsize=(10, 6))
+
+    # Check if there are more than two series to plot
+    if type(y) is tuple:
+
+        # Loop over the y elements
+        for y_curr in y:
+            # Plot the x and current y values
+            plt.plot(x[start:end], y_curr[start:end], format)
+
+    else:
+        # Plot the x and y values
+        plt.plot(x[start:end], y[start:end], format)
+
+    # Label the x-axis
+    plt.xlabel(xlabel)
+
+    # Label the y-axis
+    plt.ylabel(ylabel)
+
+    # Set the legend
+    if legend:
+        plt.legend(legend)
+
+    # Set the title
+    plt.title(title)
+
+    # Overlay a grid on the graph
+    plt.grid(True)
