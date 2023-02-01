@@ -10,6 +10,73 @@ import matplotlib.pyplot as plt
 
 from tensorflow.keras.preprocessing import image
 
+# This functions prints the label based on the prediction of the model
+def print_label(prediction):
+    # First define the labels and the corresponding indices
+    labels = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+    indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    # Now create a dictionary with the labels and the indices
+    label_dict = dict(zip(indices, labels))
+    # Now get the maximum value from the prediction
+    max_value = max(prediction)
+    # Now get the index of the maximum value
+    max_index = list(prediction).index(max_value)
+    # Now print the label
+    print(f"Label: {label_dict[max_index]}")
+
+def run_image_through_layers(test_image):
+    # Print the image
+    plt.imshow(test_image, cmap='inferno')
+    plt.show()
+    test_image = test_image.reshape(1, 28, 28,
+                                    1)  # Needs to be reshaped to (1, 28, 28, 1) because the model expects a batch of images
+    conv2d_layer1 = model.layers[0]
+    conv2d_image = conv2d_layer1(
+        test_image)  # Run the image through the first convolutional layer. This will produce 32 images as a 4d array (1, 26, 26, 32)
+    print_image_summary(conv2d_image)
+    # Run the image through the first max pooling layer
+    max_pooling_layer1 = model.layers[1]
+    conv2d_image = max_pooling_layer1(
+        conv2d_image)  # Run the image through the first max pooling layer. This will produce 32 images as a 4d array (1, 13, 13, 32)
+    print_image_summary(conv2d_image)
+    # Now run the image through the second convolutional layer
+    conv2d_layer2 = model.layers[2]
+    conv2d_image = conv2d_layer2(
+        conv2d_image)  # Run the image through the second convolutional layer. This will produce 32 images as a 4d array (1, 24, 24, 32)
+    print_image_summary(conv2d_image)
+    # Run the image through the second max pooling layer
+    max_pooling_layer2 = model.layers[3]
+    conv2d_image = max_pooling_layer2(
+        conv2d_image)  # Run the image through the second max pooling layer. This will produce 32 images as a 4d array (1, 12, 12, 32)
+    print_image_summary(conv2d_image)
+    # Run the image through the flatten layer
+    flatten_layer = model.layers[4]
+    conv2d_image = flatten_layer(conv2d_image)  # Run the image through the flatten layer.
+    print(
+        f"conv2d_image.shape={conv2d_image.shape}")  # The shape is (1, 800) because the image is flattened to a 1d array which is 12*12*32=800 (see above)
+    # Run the image through the first dense layer
+    dense_layer1 = model.layers[5]
+    conv2d_image = dense_layer1(conv2d_image)  # Run the image through the first dense layer.
+    print(
+        f"conv2d_image.shape={conv2d_image.shape}")  # The shape is (1, 128) because the layer has 128 neurons and therefore produces a 1d array of 128 values
+    # Let's display the output of the first dense layer which is a 1d array of 128 values
+    plt.figure(figsize=(10, 4))
+    plt.xticks([])
+    plt.yticks([])
+    plt.imshow(conv2d_image, cmap='inferno')
+    plt.show()
+    # The image above shows the output of the first dense layer which is a 1d array of 128 values. The black pixels represent the values that are close to 0 and the white pixels represent the values that are close to 1.
+    # Run the image through the output layer
+    dense_layer2 = model.layers[6]
+    conv2d_image = dense_layer2(conv2d_image)  # Run the image through the output layer.
+    print(
+        f"conv2d_image.shape={conv2d_image.shape}")  # The shape is (1, 10) because the layer has 10 neurons and therefore produces a 1d array of 10 values
+    # Print the array surpessing the scientific notation and rounding the values to 2 decimals
+    np.set_printoptions(suppress=True, precision=2)
+    print(conv2d_image)
+    print_label(conv2d_image[0])
+
+
 def print_image_summary(conv2d_image, cols=8):
     """  Prints a summary of the image. See https://www.kaggle.com/code/sanjitschouhan/visualizing-conv2d-output?scriptVersionId=49603115&cellId=27
     """
@@ -68,56 +135,8 @@ else:
 # The following is used to visualize the way an image is processed by the model
 # Visualize the output of the first convolutional layer for the first image in the training set
 test_image = real_test_images[0]
-# Print the image
-plt.imshow(test_image, cmap='inferno')
-plt.show()
 
-test_image = test_image.reshape(1, 28, 28, 1) # Needs to be reshaped to (1, 28, 28, 1) because the model expects a batch of images
-conv2d_layer1 = model.layers[0]
-conv2d_image = conv2d_layer1(test_image) # Run the image through the first convolutional layer. This will produce 32 images as a 4d array (1, 26, 26, 32)
-print_image_summary(conv2d_image)
-
-# Run the image through the first max pooling layer
-max_pooling_layer1 = model.layers[1]
-conv2d_image = max_pooling_layer1(conv2d_image) # Run the image through the first max pooling layer. This will produce 32 images as a 4d array (1, 13, 13, 32)
-print_image_summary(conv2d_image)
-
-# Now run the image through the second convolutional layer
-conv2d_layer2 = model.layers[2]
-conv2d_image = conv2d_layer2(conv2d_image) # Run the image through the second convolutional layer. This will produce 32 images as a 4d array (1, 24, 24, 32)
-print_image_summary(conv2d_image)
-
-# Run the image through the second max pooling layer
-max_pooling_layer2 = model.layers[3]
-conv2d_image = max_pooling_layer2(conv2d_image) # Run the image through the second max pooling layer. This will produce 32 images as a 4d array (1, 12, 12, 32)
-print_image_summary(conv2d_image)
-
-# Run the image through the flatten layer
-flatten_layer = model.layers[4]
-conv2d_image = flatten_layer(conv2d_image) # Run the image through the flatten layer.
-print(f"conv2d_image.shape={conv2d_image.shape}") # The shape is (1, 800) because the image is flattened to a 1d array which is 12*12*32=800 (see above)
-
-# Run the image through the first dense layer
-dense_layer1 = model.layers[5]
-conv2d_image = dense_layer1(conv2d_image) # Run the image through the first dense layer.
-print(f"conv2d_image.shape={conv2d_image.shape}") # The shape is (1, 128) because the layer has 128 neurons and therefore produces a 1d array of 128 values
-
-# Let's display the output of the first dense layer which is a 1d array of 128 values
-plt.figure(figsize=(10, 4))
-plt.xticks([])
-plt.yticks([])
-plt.imshow(conv2d_image, cmap='inferno')
-plt.show()
-# The image above shows the output of the first dense layer which is a 1d array of 128 values. The black pixels represent the values that are close to 0 and the white pixels represent the values that are close to 1.
-
-# Run the image through the output layer
-dense_layer2 = model.layers[6]
-conv2d_image = dense_layer2(conv2d_image) # Run the image through the output layer.
-print(f"conv2d_image.shape={conv2d_image.shape}") # The shape is (1, 10) because the layer has 10 neurons and therefore produces a 1d array of 10 values
-# Print the array surpessing the scientific notation and rounding the values to 2 decimals
-np.set_printoptions(suppress=True, precision=2)
-print(conv2d_image)
-# The output is [[0. 0. 0. 0. 0. 0. 0. 0. 0. 1.]] which means that the model is 100% sure that the image is a boot.
+run_image_through_layers(test_image)
 
 # Now try to predict the class of a range of images located in the image-recognition-test-images folder.
 # As a reminder, the classes are:
@@ -140,15 +159,20 @@ for real_test_image in real_test_images:
     plt.imshow(img)
     plt.show()
 
-    # For the image to be processed by the model, it needs to be converted to a 28x28 image with a single channel
+    # For the image to be processed by the model, it needs to be converted to a 28x28 in grayscale
     img = img.resize((28, 28))
     img = img.convert('L')
-    plt.imshow(img)
+    # Plot the image in grayscale
+    plt.imshow(img, cmap='gray')
     plt.show()
 
-    # Convert the image to a numpy array and predict the class
+    # For running the image through the model, we need to convert it to a numpy array
     img = image.img_to_array(img)
-    img = img.reshape(1, 28, 28, 1)
-    img = img / 255.0
-    prediction = model.predict(img)
-    print(f"prediction={prediction}")
+    run_image_through_layers(img)
+    #
+    # # Convert the image to a numpy array and predict the class
+    # img = image.img_to_array(img)
+    # img = img.reshape(1, 28, 28, 1)
+    # img = img / 255.0
+    # prediction = model.predict(img)
+    # print(f"prediction={prediction}")
