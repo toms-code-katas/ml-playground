@@ -1,11 +1,14 @@
 # This file contains an example of image recognition using convolutional neural networks.
 # A good visualization of what convolutions are can be found here:
 # https://upload.wikimedia.org/wikipedia/commons/1/19/2D_Convolution_Animation.gif
+import glob
 import os
 
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
+
+from tensorflow.keras.preprocessing import image
 
 def print_image_summary(conv2d_image, cols=8):
     """  Prints a summary of the image. See https://www.kaggle.com/code/sanjitschouhan/visualizing-conv2d-output?scriptVersionId=49603115&cellId=27
@@ -25,10 +28,10 @@ def print_image_summary(conv2d_image, cols=8):
 
 
 fmnist = tf.keras.datasets.fashion_mnist
-(training_images, training_labels), (test_images, test_labels) = fmnist.load_data()
+(training_images, training_labels), (real_test_images, test_labels) = fmnist.load_data()
 
 training_images = training_images / 255.0
-test_images = test_images / 255.0
+real_test_images = real_test_images / 255.0
 
 model = tf.keras.models.Sequential([
 
@@ -59,19 +62,19 @@ model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=
 if os.path.isfile('model.h5'):
     model.load_weights('model.h5')
 else:
-    model.fit(training_images, training_labels, epochs=5, validation_data=(test_images, test_labels), verbose=1)
+    model.fit(training_images, training_labels, epochs=5, validation_data=(real_test_images, test_labels), verbose=1)
     model.save_weights('model.h5')
 
 # The following is used to visualize the way an image is processed by the model
 # Visualize the output of the first convolutional layer for the first image in the training set
-image = test_images[0]
+test_image = real_test_images[0]
 # Print the image
-plt.imshow(image, cmap='inferno')
+plt.imshow(test_image, cmap='inferno')
 plt.show()
 
-image = image.reshape(1, 28, 28, 1) # Needs to be reshaped to (1, 28, 28, 1) because the model expects a batch of images
+test_image = test_image.reshape(1, 28, 28, 1) # Needs to be reshaped to (1, 28, 28, 1) because the model expects a batch of images
 conv2d_layer1 = model.layers[0]
-conv2d_image = conv2d_layer1(image) # Run the image through the first convolutional layer. This will produce 32 images as a 4d array (1, 26, 26, 32)
+conv2d_image = conv2d_layer1(test_image) # Run the image through the first convolutional layer. This will produce 32 images as a 4d array (1, 26, 26, 32)
 print_image_summary(conv2d_image)
 
 # Run the image through the first max pooling layer
@@ -115,3 +118,37 @@ print(f"conv2d_image.shape={conv2d_image.shape}") # The shape is (1, 10) because
 np.set_printoptions(suppress=True, precision=2)
 print(conv2d_image)
 # The output is [[0. 0. 0. 0. 0. 0. 0. 0. 0. 1.]] which means that the model is 100% sure that the image is a boot.
+
+# Now try to predict the class of a range of images located in the image-recognition-test-images folder.
+# As a reminder, the classes are:
+# 0 - T-shirt/top
+# 1 - Trouser
+# 2 - Pullover
+# 3 - Dress
+# 4 - Coat
+# 5 - Sandal
+# 6 - Shirt
+# 7 - Sneaker
+# 8 - Bag
+# 9 - Ankle boot
+
+# Get a list of all the images in the image-recognition-test-images folder
+real_test_images = glob.glob("image-recognition-test-images/*.png")
+for real_test_image in real_test_images:
+    # Since it is an arbitrary image, we need to convert it to a 28x28 image with a single channel
+    img = image.load_img(real_test_image)
+    plt.imshow(img)
+    plt.show()
+
+    # For the image to be processed by the model, it needs to be converted to a 28x28 image with a single channel
+    img = img.resize((28, 28))
+    img = img.convert('L')
+    plt.imshow(img)
+    plt.show()
+
+    # Convert the image to a numpy array and predict the class
+    img = image.img_to_array(img)
+    img = img.reshape(1, 28, 28, 1)
+    img = img / 255.0
+    prediction = model.predict(img)
+    print(f"prediction={prediction}")
